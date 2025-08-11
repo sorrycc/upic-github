@@ -1,3 +1,4 @@
+require('dotenv').config();
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
@@ -18,7 +19,8 @@ async function testBase64Upload(filePath) {
     const response = await fetch('http://localhost:8889/api/upload', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.TOKEN}`
       },
       body: JSON.stringify({
         file: testImageData,

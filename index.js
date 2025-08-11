@@ -20,10 +20,18 @@ const CONFIG = {
 console.log(`[${new Date().toISOString()}] Initializing server...`);
 
 // Validate required environment variables
-const requiredEnvVars = ['GITHUB_TOKEN', 'GITHUB_REPO', 'SITE_PREFIX', 'TOKEN'];
+const requiredEnvVars = ['TOKEN'];
 const missing = requiredEnvVars.filter(v => !process.env[v]);
 if (missing.length > 0) {
   throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+}
+
+// Check if GitHub upload is configured
+const isGitHubConfigured = process.env.GITHUB_TOKEN && process.env.GITHUB_REPO && process.env.SITE_PREFIX;
+if (isGitHubConfigured) {
+  console.log(`[${new Date().toISOString()}] GitHub upload configured`);
+} else {
+  console.log(`[${new Date().toISOString()}] GitHub upload not configured - files will be served locally`);
 }
 
 // Ensure tmp and cache directories exist
@@ -296,7 +304,7 @@ app.post('/api/upload', authenticateToken, async (req, res) => {
     
     fs.writeFileSync(filePath, buf, 'binary');
     
-    // PNG 压缩处理
+    // Image compression processing
     if (ext.toLowerCase() === '.png') {
       console.log(`[${new Date().toISOString()}] Compressing PNG with pngquant...`);
       try {
@@ -311,6 +319,28 @@ app.post('/api/upload', authenticateToken, async (req, res) => {
       } catch (compressError) {
         console.warn(`[${new Date().toISOString()}] PNG compression failed, using original file:`, compressError.message);
       }
+    } else if (ext.toLowerCase() === '.jpg' || ext.toLowerCase() === '.jpeg') {
+      console.log(`[${new Date().toISOString()}] Compressing JPEG with jpegoptim...`);
+      try {
+        execSync(`jpegoptim --max=80 --strip-all "${filePath}"`, { stdio: 'inherit' });
+        console.log(`[${new Date().toISOString()}] JPEG compression completed`);
+      } catch (compressError) {
+        console.warn(`[${new Date().toISOString()}] JPEG compression failed, using original file:`, compressError.message);
+      }
+    } else if (ext.toLowerCase() === '.gif') {
+      console.log(`[${new Date().toISOString()}] Compressing GIF with gifsicle...`);
+      try {
+        const compressedPath = path.join(__dirname, 'tmp', `compressed-${filename}`);
+        execSync(`gifsicle --optimize=3 --output "${compressedPath}" "${filePath}"`, { stdio: 'inherit' });
+        
+        // 使用压缩后的文件替换原文件
+        if (fs.existsSync(compressedPath)) {
+          fs.renameSync(compressedPath, filePath);
+          console.log(`[${new Date().toISOString()}] GIF compression completed`);
+        }
+      } catch (compressError) {
+        console.warn(`[${new Date().toISOString()}] GIF compression failed, using original file:`, compressError.message);
+      }
     }
     
     const finalSize = fs.statSync(filePath).size;
@@ -319,26 +349,34 @@ app.post('/api/upload', authenticateToken, async (req, res) => {
     console.log(`  - Saved as: ${filename}`);
     console.log(`  - Original size: ${buf.length} bytes`);
     console.log(`  - Final size: ${finalSize} bytes`);
-    if (ext.toLowerCase() === '.png' && finalSize < buf.length) {
+    const supportedFormats = ['.png', '.jpg', '.jpeg', '.gif'];
+    if (supportedFormats.includes(ext.toLowerCase()) && finalSize < buf.length) {
       console.log(`  - Compression ratio: ${((1 - finalSize/buf.length) * 100).toFixed(1)}%`);
     }
     
-    // Upload to GitHub
-    try {
-      const githubUrl = await uploadToGitHub(filePath, filename);
-      console.log(`[${new Date().toISOString()}] Returning GitHub URL: ${githubUrl}`);
-      
-      // Clean up local file after successful upload
-      fs.unlinkSync(filePath);
-      console.log(`[${new Date().toISOString()}] Local file cleaned up`);
-      
-      res.json({ data: githubUrl });
-    } catch (githubError) {
-      console.error(`[${new Date().toISOString()}] GitHub upload failed:`, githubError.message);
-      
-      // Fallback to local URL if GitHub upload fails
+    // Upload to GitHub or serve locally
+    if (isGitHubConfigured) {
+      try {
+        const githubUrl = await uploadToGitHub(filePath, filename);
+        console.log(`[${new Date().toISOString()}] Returning GitHub URL: ${githubUrl}`);
+        
+        // Clean up local file after successful upload
+        fs.unlinkSync(filePath);
+        console.log(`[${new Date().toISOString()}] Local file cleaned up`);
+        
+        res.json({ data: githubUrl });
+      } catch (githubError) {
+        console.error(`[${new Date().toISOString()}] GitHub upload failed:`, githubError.message);
+        
+        // Fallback to local URL if GitHub upload fails
+        const localUrl = `http://localhost:${CONFIG.PORT}/tmp/${filename}`;
+        console.log(`[${new Date().toISOString()}] Fallback to local URL: ${localUrl}`);
+        res.json({ data: localUrl });
+      }
+    } else {
+      // Serve locally when GitHub is not configured
       const localUrl = `http://localhost:${CONFIG.PORT}/tmp/${filename}`;
-      console.log(`[${new Date().toISOString()}] Fallback to local URL: ${localUrl}`);
+      console.log(`[${new Date().toISOString()}] Returning local URL: ${localUrl}`);
       res.json({ data: localUrl });
     }
   } catch (error) {
