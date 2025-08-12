@@ -311,7 +311,7 @@ app.post('/api/upload', authenticateToken, async (req, res) => {
         const compressedPath = path.join(__dirname, 'tmp', `compressed-${filename}`);
         execSync(`pngquant --quality=65-80 --output "${compressedPath}" "${filePath}"`, { stdio: 'inherit' });
         
-        // 使用压缩后的文件替换原文件
+        // Replace original file with compressed file
         if (fs.existsSync(compressedPath)) {
           fs.renameSync(compressedPath, filePath);
           console.log(`[${new Date().toISOString()}] PNG compression completed`);
@@ -333,7 +333,7 @@ app.post('/api/upload', authenticateToken, async (req, res) => {
         const compressedPath = path.join(__dirname, 'tmp', `compressed-${filename}`);
         execSync(`gifsicle --optimize=3 --output "${compressedPath}" "${filePath}"`, { stdio: 'inherit' });
         
-        // 使用压缩后的文件替换原文件
+        // Replace original file with compressed file
         if (fs.existsSync(compressedPath)) {
           fs.renameSync(compressedPath, filePath);
           console.log(`[${new Date().toISOString()}] GIF compression completed`);

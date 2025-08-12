@@ -5,10 +5,10 @@ const path = require('path');
 
 async function testBase64Upload(filePath) {
   try {
-    // 获取文件路径，优先使用命令行参数，否则使用默认值
+    // Get file path, prioritize command line arguments, otherwise use default value
     const imagePath = filePath || path.join(__dirname, 'upic.png');
     
-    // 检查文件是否存在
+    // Check if file exists
     if (!fs.existsSync(imagePath)) {
       throw new Error(`File not found: ${imagePath}`);
     }
@@ -40,7 +40,7 @@ async function testBase64Upload(filePath) {
   }
 }
 
-// 获取命令行参数
+// Get command line arguments
 const args = process.argv.slice(2);
 const filePath = args[0];
 
